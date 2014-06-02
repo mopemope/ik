@@ -15,6 +15,7 @@ type ForwardOutput struct {
 	factory *ForwardOutputFactory
 	logger  *log.Logger
 	codec   *codec.MsgpackHandle
+	network string
 	bind    string
 	enc     *codec.Encoder
 	conn    net.Conn
@@ -47,7 +48,7 @@ func (output *ForwardOutput) encodeRecordSet(recordSet ik.FluentRecordSet) error
 
 func (output *ForwardOutput) flush() error {
 	if output.conn == nil {
-		conn, err := net.Dial("tcp", output.bind)
+		conn, err := net.Dial(output.network, output.bind)
 		if err != nil {
 			output.logger.Printf("%#v", err.Error())
 			return err
@@ -108,7 +109,7 @@ func (output *ForwardOutput) Shutdown() error {
 type ForwardOutputFactory struct {
 }
 
-func newForwardOutput(factory *ForwardOutputFactory, logger *log.Logger, bind string) (*ForwardOutput, error) {
+func newForwardOutput(factory *ForwardOutputFactory, logger *log.Logger, network string, bind string) (*ForwardOutput, error) {
 	_codec := codec.MsgpackHandle{}
 	_codec.MapType = reflect.TypeOf(map[string]interface{}(nil))
 	_codec.RawToString = false
@@ -117,6 +118,7 @@ func newForwardOutput(factory *ForwardOutputFactory, logger *log.Logger, bind st
 		factory: factory,
 		logger:  logger,
 		codec:   &_codec,
+		network: network,
 		bind:    bind,
 	}, nil
 }
@@ -126,6 +128,10 @@ func (factory *ForwardOutputFactory) Name() string {
 }
 
 func (factory *ForwardOutputFactory) New(engine ik.Engine, config *ik.ConfigElement) (ik.Output, error) {
+	network, ok := config.Attrs["network"]
+	if !ok {
+		network = "tcp"
+	}
 	host, ok := config.Attrs["host"]
 	if !ok {
 		host = "localhost"
@@ -144,7 +150,7 @@ func (factory *ForwardOutputFactory) New(engine ik.Engine, config *ik.ConfigElem
 		return nil, err
 	}
 	bind := host + ":" + netPort
-	output, err := newForwardOutput(factory, engine.Logger(), bind)
+	output, err := newForwardOutput(factory, engine.Logger(), network, bind)
 	output.run_flush(flush_interval)
 	return output, err
 }
